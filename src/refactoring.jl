@@ -82,9 +82,10 @@ function pointInPolygonClassification(V,EV)
         x,y = pnt
         xmin,xmax,ymin,ymax = x,x,y,y
         tilecode = setTile([ymax,ymin,xmax,xmin])
-        count,status = 0,0
+        cont,status = 0,0
 
         for (k,edge) in enumerate(EV)
+			#print(Threads.threadid())c
             p1,p2 = V[:,edge[1]],V[:,edge[2]]
             (x1,y1),(x2,y2) = p1,p2
             c1,c2 = tilecode(p1),tilecode(p2)
@@ -94,7 +95,89 @@ function pointInPolygonClassification(V,EV)
             elseif (c_edge == 12) & (c_un == c_edge) return "p_on"
             elseif c_edge == 3
                 if c_int == 0 return "p_on"
-                elseif c_int == 4 count += 1 end
+                elseif c_int == 4 cont += 1 end
+            elseif c_edge == 15
+                x_int = ((y-y2)*(x1-x2)/(y1-y2))+x2
+                if x_int > x cont += 1
+                elseif x_int == x return "p_on" end
+            elseif (c_edge == 13) & ((c1==4) | (c2==4))
+                    crossingTest(1,2,status,cont)
+            elseif (c_edge == 14) & ((c1==4) | (c2==4))
+                    crossingTest(2,1,status,cont)
+            elseif c_edge == 7 cont += 1
+            elseif c_edge == 11 cont = cont
+            elseif c_edge == 1
+                if c_int == 0 return "p_on"
+                elseif c_int == 4 crossingTest(1,2,status,cont) end
+            elseif c_edge == 2
+                if c_int == 0 return "p_on"
+                elseif c_int == 4 crossingTest(2,1,status,cont) end
+            elseif (c_edge == 4) & (c_un == c_edge) return "p_on"
+            elseif (c_edge == 8) & (c_un == c_edge) return "p_on"
+            elseif c_edge == 5
+                if (c1==0) | (c2==0) return "p_on"
+                else crossingTest(1,2,status,cont) end
+            elseif c_edge == 6
+                if (c1==0) | (c2==0) return "p_on"
+                else crossingTest(2,1,status,cont) end
+            elseif (c_edge == 9) & ((c1==0) | (c2==0)) return "p_on"
+            elseif (c_edge == 1000) & ((c1==0) | (c2==0)) return "p_on"
+            end
+        end
+        if (round(cont)%2)==1
+        	return "p_in"
+        else
+        	return "p_out"
+        end
+    end
+    return pointInPolygonClassification0
+end
+
+'''
+
+using Random
+function darts_in_circle(n, rng=Random.GLOBAL_RNG)
+	inside = 0
+	for i in 1:n
+		if rand(rng)^2 + rand(rng)^2 < 1
+			inside += 1
+		end
+	end
+	return inside
+end
+
+function pi_serial(n)
+	return 4 * darts_in_circle(n) / n
+end
+
+
+function pi_threads(n, loops)
+	inside = zeros(Int, loops)
+	@threads for i in 1:loops
+		rng = rnglist[threadid()]
+		inside[threadid()] = darts_in_circle(n, rng)
+	end
+    return 4 * sum(inside) / (n*loops)
+end
+
+
+'''
+
+function pointInPolygonClassification_MT(V,EV,t=Threads.nthreads())
+
+	function a(EV)
+		for (k,edge) in enumerate(EV)
+			#print(Threads.threadid())
+            p1,p2 = V[:,edge[1]],V[:,edge[2]]
+            (x1,y1),(x2,y2) = p1,p2
+            c1,c2 = tilecode(p1),tilecode(p2)
+            c_edge, c_un, c_int = c1⊻c2, c1|c2, c1&c2
+
+            if (c_edge == 0) & (c_un == 0) return "p_on"
+            elseif (c_edge == 12) & (c_un == c_edge) return "p_on"
+            elseif c_edge == 3
+                if c_int == 0 return "p_on"
+                elseif c_int == 4 cont += 1 end
             elseif c_edge == 15
                 x_int = ((y-y2)*(x1-x2)/(y1-y2))+x2
                 if x_int > x count += 1
@@ -123,6 +206,17 @@ function pointInPolygonClassification(V,EV)
             elseif (c_edge == 10) & ((c1==0) | (c2==0)) return "p_on"
             end
         end
+
+
+    function pointInPolygonClassification0(pnt)
+        x,y = pnt
+        xmin,xmax,ymin,ymax = x,x,y,y
+        tilecode = setTile([ymax,ymin,xmax,xmin])
+        count = zeros(Int,t)
+		status = zeros(Int,t)
+
+
+
         if (round(count)%2)==1
         	return "p_in"
         else

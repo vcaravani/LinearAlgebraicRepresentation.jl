@@ -16,7 +16,6 @@ function pointsinout(V,EV, n=2_000_000)
 	point_on = []
 	classify = Lar.pointInPolygonClassification(V,EV)
 	for k=1:n
-
 		queryPoint = rand(1,2)
 		inOut = classify(queryPoint)
 		# println("k = $k, queryPoint = $queryPoint, inOut = $inOut")
@@ -33,8 +32,8 @@ function pointsinout(V,EV, n=2_000_000)
 end
 
 
-#using Random
-#const rnglist = [MersenneTwister() for i in 1:Threads.nthreads()]
+using Random
+const rnglist = [MersenneTwister() for i in 1:Threads.nthreads()]
 
 function pointsinout_multithreading(V,EV, n=2_000_000,t=Threads.nthreads())
 
@@ -45,11 +44,9 @@ function pointsinout_multithreading(V,EV, n=2_000_000,t=Threads.nthreads())
 	classify = Lar.pointInPolygonClassification(V,EV)
 
 	Threads.@threads for k=1:n
-
-		#queryPoint = rand(rnglist[Threads.threadid()],1,2)
-		queryPoint = rand(1,2)
+		queryPoint = rand(rnglist[Threads.threadid()],1,2)
+		#queryPoint = rand(1,2)
 		inOut = classify(queryPoint)
-		# println("k = $k, queryPoint = $queryPoint, inOut = $inOut")
 		if inOut=="p_in"
 			push!(point_in[Threads.threadid()], queryPoint);
 		elseif inOut=="p_out"
@@ -58,12 +55,49 @@ function pointsinout_multithreading(V,EV, n=2_000_000,t=Threads.nthreads())
 			push!(point_on[Threads.threadid()], queryPoint);
 		end
 	end
-	#GL.GLPoints(queryPoint,GL.COLORS[2])
 	return vcat(point_in...),vcat(point_out...),vcat(point_on...)
 end
 
-@btime points_in, points_out, points_on = pointsinout_multithreading(V,EV);
-#@btime points_in, points_out, points_on = pointsinout(V,EV);
+using Distributed
+#nprocs()
+#addprocs(1)
+#n_cpu = length(Sys.cpu_info()) or Sys.CPU_THREADS
+
+function pointsinout_multiproc(V,EV, n=2_000_000,ws=Distributed.nworkers())
+
+	point_in = [[] for i in 1:ws]
+	point_out = [[] for i in 1:ws]
+	point_on = [[] for i in 1:ws]
+	# al posto di questi canale remoto??
+
+	classify = Lar.pointInPolygonClassification(V,EV)
+
+	@distributed for k=1:n
+
+		# va fatta la chiamata remota
+		queryPoint = rand(rnglist[Threads.threadid()],1,2)
+		#queryPoint = rand(1,2)
+		inOut = classify(queryPoint)
+		if inOut=="p_in"
+			push!(point_in[Threads.threadid()], queryPoint);
+		elseif inOut=="p_out"
+			push!(point_out[Threads.threadid()], queryPoint);
+		elseif inOut=="p_on"
+			push!(point_on[Threads.threadid()], queryPoint);
+		end
+	end
+
+	#a,b,c, = fetch()
+
+	return vcat(a),vcat(b),vcat(c)
+end
+
+
+
+#@time points_in, points_out, points_on = pointsinout_multiproc(V,EV)
+
+@time points_in, points_out, points_on = pointsinout_multithreading(V,EV);
+@time points_in, points_out, points_on = pointsinout(V,EV);
 
 pointsin = [vcat(points_in...) zeros(length(points_in),1)]
 pointsout = [vcat(points_out...) zeros(length(points_out),1)]
@@ -75,25 +109,14 @@ out_mesh = [GL.GLPoints(pointsout, GL.COLORS[3])]
 result = cat([polygon,in_mesh,out_mesh])
 GL.VIEW(result);
 
-
 #=
 
-with @time macro:
-
-n = 1_000_000
-serial -> 167.890818 seconds (886.04 M allocations: 79.302 GiB, 31.84% gc time)
-multithread -> 67.135810 seconds (886.26 M allocations: 79.323 GiB, 34.45% gc time)
-
-
 n = 2_000_000
-serial -> 173.068835 seconds (1.77 G allocations: 158.600 GiB, 19.59% gc time)
-multithread -> 88.046785 seconds (1.77 G allocations: 158.630 GiB, 36.36% gc time)
-
-
 
 with @btime macro:
 
-n = 2_000_000
-serial -> 216.330 s (1772000042 allocations: 158.60 GiB)
-multithread -> 88.605 s (1780279949 allocations: 159.05 GiB)
+serial -> 158.054 s (1772000042 allocations: 158.60 GiB)
+multithread -> 51.618 s (1772000187 allocations: 158.62 GiB)
+multithread with separate RNG for each thread -> 51.141 s (1772000205 allocations: 158.62 GiB)
+
 =#
