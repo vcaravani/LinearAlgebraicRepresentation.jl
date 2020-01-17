@@ -3,7 +3,7 @@ Lar = LinearAlgebraicRepresentation
 using IntervalTrees
 using SparseArrays
 using NearestNeighbors
-
+using Threads
 
 
 #---------------------------------------------------------------------
